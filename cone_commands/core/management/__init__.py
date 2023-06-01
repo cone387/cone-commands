@@ -16,7 +16,8 @@ class ManagementUtility:
     """
 
     def __init__(self, argv=None):
-        self.argv = argv or sys.argv[:] + ['stock', '--name', '平安银行']
+        self.argv = argv or sys.argv[:] + ['stock', '--name', '平安银行', '--code', 'SZ000681', '--forever']
+        self.argv = argv or sys.argv[:]
         self.prog_name = os.path.basename(self.argv[0])
         if self.prog_name == "__main__.py":
             self.prog_name = "python -m cone_commands"

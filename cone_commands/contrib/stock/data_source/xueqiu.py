@@ -1,5 +1,5 @@
 from datetime import datetime
-from ..base import StockItem, DataSource, BaseDataSource
+from ..base import StockItem, DataSource, BaseDataSource, KLine
 import requests
 
 home_url = 'https://xueqiu.com/hq'
@@ -24,7 +24,6 @@ def get_cookies():
     response = requests.get(home_url, headers=headers)
     token = response.cookies.get('xq_a_token')
     assert token, "xq_a_token not found"
-    print(token)
     return {'xq_a_token': token}
 
 
@@ -32,8 +31,14 @@ def get_cookies():
 class XueQiuDataSource(BaseDataSource):
 
     def __init__(self):
-        self._cookies = get_cookies()
+        self._cookies = None
         super(XueQiuDataSource, self).__init__()
+
+    @property
+    def cookies(self):
+        if not self._cookies:
+            self._cookies = get_cookies()
+        return self._cookies
 
     def request_kline(self, stock: StockItem, date: datetime = None):
         date = date or datetime.now()
@@ -45,21 +50,25 @@ class XueQiuDataSource(BaseDataSource):
             "type": "before",
             "indicator": "kline"
         }
+        error = None
         for i in range(3):
-            response = requests.get(url, params=params, headers=headers, cookies=cookies)
+            try:
+                response = requests.get(url, params=params, headers=headers, cookies=self.cookies)
+            except Exception as e:
+                error = e
+                break
             try:
                 item = response.json()['data']['item']
                 _, _, open_price, max_price, min_price, current_price, diff, change, *_ = item[0]
-            except:
-                print_red(response.text)
+            except IndexError:
+                self._cookies = None
                 continue
-            return {
-                'date': date,
-                'open': open_price,
-                'max': max_price,
-                'min': min_price,
-                'current': current_price,
-                'diff': diff,
-                'change': change,
-            }
-        raise Exception(f"request_kline failed, code: {stock.code}, date: {date}")
+            except KeyError as e:
+                print_red(response.json())
+                error = e
+                break
+            except Exception as e:
+                error = e
+                break
+            return KLine(stock, date, open_price, max_price, min_price, current_price, diff, change)
+        raise Exception(f"request_kline failed, code: {stock.code}, date: {date}, error: {error}")

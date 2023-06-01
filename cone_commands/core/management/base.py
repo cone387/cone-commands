@@ -188,7 +188,7 @@ class BaseCommand:
 
     @classproperty
     def command_name(cls):
-        return cls.__module__.split(".")[-1]
+        return cls.name or cls.__module__.split(".")[-1]
 
     @command_name.setter
     def command_name(cls, value):
