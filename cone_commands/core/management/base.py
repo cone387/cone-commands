@@ -185,6 +185,7 @@ class BaseCommand:
     suppressed_base_arguments = set()
 
     name = None
+    status = CommandStatus.AVAILABLE
 
     @classproperty
     def command_name(cls):
@@ -261,6 +262,11 @@ class BaseCommand:
             action="store_true",
             help="Force colorization of the command output.",
         )
+        self.add_base_argument(
+            parser,
+            '--proxy',
+            help='Specify a proxy server to use for requests. e.g. '
+        )
         if self.requires_system_checks:
             parser.add_argument(
                 "--skip-checks",
@@ -270,7 +276,7 @@ class BaseCommand:
         self.add_arguments(parser)
         return parser
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser):
         """
         Entry point for subclassed commands to add custom arguments.
         """

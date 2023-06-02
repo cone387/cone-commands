@@ -16,7 +16,6 @@ class ManagementUtility:
     """
 
     def __init__(self, argv=None):
-        self.argv = argv or sys.argv[:] + ['stock', '--name', '平安银行', '--code', 'SZ000681', '--forever']
         self.argv = argv or sys.argv[:]
         self.prog_name = os.path.basename(self.argv[0])
         if self.prog_name == "__main__.py":
@@ -30,6 +29,7 @@ class ManagementUtility:
         try:
             subcommand = self.argv[1]
         except IndexError:
+            self.argv.append('help')
             subcommand = "help"  # Display help if no arguments were given.
 
         # Preprocess options to extract --settings and --pythonpath.
@@ -50,8 +50,12 @@ class ManagementUtility:
             pass  # Ignore any option errors at this point.
 
         print("%s commands are available:" % len(Command.values()))
-        command: BaseCommand = Command(command_name=subcommand, is_registry=False)
-        command.run_from_argv(self.argv)
+        try:
+            command: BaseCommand = Command(command_name=subcommand, is_registry=False)
+        except KeyError:
+            print("Unknown command: %r\nType '%s help' for usage." % (subcommand, self.prog_name))
+        else:
+            command.run_from_argv(self.argv)
 
 
 def execute_from_command_line(argv=None):

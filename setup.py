@@ -5,7 +5,7 @@ setup(
     packages=find_packages(exclude=['local_tests', 'tests']),
     version='1.0.0',
     install_requires=[
-        "py-cone>=1.0.8",
+        "py-cone>=1.0.9",
     ],
     include_package_data=True,
     author='cone387',

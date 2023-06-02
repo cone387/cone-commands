@@ -80,6 +80,14 @@ class KLine:
 class BaseDataSource:
     name = None
 
+    def __init__(self, proxy=None):
+        if proxy:
+            if proxy.startswith('http'):
+                proxy = {'http': proxy, 'https': proxy}
+            else:
+                proxy = {'http': 'http://' + proxy, 'https': 'http://' + proxy}
+        self.proxies = proxy
+
     @classproperty
     def data_source(cls):
         return cls.name or cls.__module__.split(".")[-1]
@@ -103,7 +111,7 @@ class BaseReceiver:
     def receiver_name(cls, value):
         cls.name = value
 
-    def on_triggered(self, kline: KLine, histories: List[KLine]):
+    def on_received(self, trigger, current: KLine, histories: List[KLine]):
         raise NotImplementedError
 
 
@@ -129,8 +137,7 @@ class BaseTrigger:
     def on_triggered(self, current: KLine, histories: List[KLine]):
         if self.receiver:
             try:
-                receiver = Receiver[self.receiver]
+                receiver: BaseReceiver = Receiver[self.receiver]
             except KeyError:
                 raise ValueError("receiver %s not found" % self.receiver)
-            receiver.on_triggered(current, histories)
-
+            receiver.on_received(self, current, histories)

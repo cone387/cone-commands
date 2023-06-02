@@ -30,9 +30,9 @@ def get_cookies():
 @DataSource.register()
 class XueQiuDataSource(BaseDataSource):
 
-    def __init__(self):
+    def __init__(self, proxy=None):
         self._cookies = None
-        super(XueQiuDataSource, self).__init__()
+        super(XueQiuDataSource, self).__init__(proxy=proxy)
 
     @property
     def cookies(self):
@@ -53,7 +53,8 @@ class XueQiuDataSource(BaseDataSource):
         error = None
         for i in range(3):
             try:
-                response = requests.get(url, params=params, headers=headers, cookies=self.cookies)
+                response = requests.get(url, params=params, headers=headers, cookies=self.cookies, verify=False,
+                                        proxies=self.proxies)
             except Exception as e:
                 error = e
                 break
@@ -71,4 +72,5 @@ class XueQiuDataSource(BaseDataSource):
                 error = e
                 break
             return KLine(stock, date, open_price, max_price, min_price, current_price, diff, change)
-        raise Exception(f"request_kline failed, code: {stock.code}, date: {date}, error: {error}")
+        raise Exception(f"request_kline failed, code: {stock.code}, date: {date}, "
+                        f"proxies: {self.proxies} error: {error}")
