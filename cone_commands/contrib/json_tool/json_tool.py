@@ -57,7 +57,7 @@ class JsonCommand(BaseCommand):
 
     def create_parser(self, prog_name, subcommand, **kwargs):
         parser = super(JsonCommand, self).create_parser(prog_name, subcommand, **kwargs)
-        parser.add_argument('-f', '--file', type=str, help='json file', required=True)
+        parser.add_argument('-f', '--file', type=str, help='json file', required=False)
         parser.add_argument('--to-excel', type=str, help='extract json to excel')
         parser.add_argument('-y', '--yes', action='store_true', help='yes to all')
         parser.add_argument('-p', '--path', type=str, help='json path')
@@ -65,6 +65,8 @@ class JsonCommand(BaseCommand):
         return parser
 
     def handle(self, *args, file=None, path=None, to_excel=None, yes=False, **options):
+        if not file:
+            return self.print_help('json', '')
         file = pathlib.Path(file)
         if not file.exists():
             raise FileNotFoundError(f'{file} not found')

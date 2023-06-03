@@ -9,6 +9,7 @@ from argparse import ArgumentParser, HelpFormatter
 from functools import partial
 from io import TextIOBase
 from cone_commands.core.management.color import color_style, no_style
+from cone_commands.conf.global_settings import CONFIG_PATH
 from cone.utils.classes import ClassManager
 from cone.utils.functional import classproperty
 
@@ -187,6 +188,13 @@ class BaseCommand:
     name = None
     status = CommandStatus.AVAILABLE
 
+    @property
+    def config_path(self):
+        path = os.path.join(CONFIG_PATH, self.command_name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return path
+
     @classproperty
     def command_name(cls):
         return cls.name or cls.__module__.split(".")[-1]
@@ -198,6 +206,7 @@ class BaseCommand:
     def __init__(self, stdout=None, stderr=None, no_color=False, force_color=False):
         self.stdout = OutputWrapper(stdout or sys.stdout)
         self.stderr = OutputWrapper(stderr or sys.stderr)
+        self.proxies = None
         if no_color and force_color:
             raise CommandError("'no_color' and 'force_color' can't be used together.")
         if no_color:
@@ -265,7 +274,7 @@ class BaseCommand:
         self.add_base_argument(
             parser,
             '--proxy',
-            help='Specify a proxy server to use for requests. e.g. '
+            help='default proxy is None, specify system to use system proxy, or specify a proxy url',
         )
         if self.requires_system_checks:
             parser.add_argument(
@@ -349,6 +358,18 @@ class BaseCommand:
             self.stdout = OutputWrapper(options["stdout"])
         if options.get("stderr"):
             self.stderr = OutputWrapper(options["stderr"])
+
+        proxy = options.get('proxy')
+        if proxy == 'system':
+            proxy = None
+        elif proxy:
+            if proxy.startswith('http'):
+                proxy = {'http': proxy, 'https': proxy}
+            else:
+                proxy = {'http': 'http://' + proxy, 'https': 'http://' + proxy}
+        else:
+            proxy = {'http': None, 'https': None}
+        self.proxies = proxy
 
         output = self.handle(*args, **options)
         if output:

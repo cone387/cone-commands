@@ -1,6 +1,6 @@
 from cone.utils.classes import ClassManager
 from cone.utils.functional import classproperty
-from typing import List, Dict, Union, Tuple
+from typing import List
 import json
 
 
@@ -80,13 +80,8 @@ class KLine:
 class BaseDataSource:
     name = None
 
-    def __init__(self, proxy=None):
-        if proxy:
-            if proxy.startswith('http'):
-                proxy = {'http': proxy, 'https': proxy}
-            else:
-                proxy = {'http': 'http://' + proxy, 'https': 'http://' + proxy}
-        self.proxies = proxy
+    def __init__(self, proxies=None):
+        self.proxies = proxies
 
     @classproperty
     def data_source(cls):

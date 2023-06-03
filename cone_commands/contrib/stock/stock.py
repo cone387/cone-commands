@@ -76,14 +76,17 @@ class KlineWatcher(BaseCommand):
     def handle(self, *args, **options):
         code = options['code']
         name = options['name']
+        date = options['date']
+        if date:
+            date = datetime.strptime(date, '%Y-%m-%d')
         if not code and not name:
             raise ValueError("code or name must be provided, use -c or -n to specify")
         stocks = [StockItem(code=x.strip() if x else None, name=y.strip() if y else None)
                   for x, y in zip_longest(code.split(','), name.split(','))]
-        data_source = DataSource(data_source=options['data_source'], proxy=options['proxy'], is_registry=False)
+        data_source = DataSource(data_source=options['data_source'], proxy=self.proxies, is_registry=False)
         if options['forever']:
             self.watch_forever(data_source, stocks, interval=options['interval'], columns=options['columns'])
         else:
             for stock in stocks:
-                kline = data_source.request_kline(stock)
+                kline = data_source.request_kline(stock, date=date)
                 print(kline.info(options['columns']))

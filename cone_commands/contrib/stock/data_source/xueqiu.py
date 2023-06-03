@@ -20,8 +20,8 @@ def print_green(text):
     print(f"\033[32m{text}\033[0m")
 
 
-def get_cookies():
-    response = requests.get(home_url, headers=headers)
+def get_cookies(**kwargs):
+    response = requests.get(home_url, headers=headers, **kwargs)
     token = response.cookies.get('xq_a_token')
     assert token, "xq_a_token not found"
     return {'xq_a_token': token}
@@ -30,14 +30,14 @@ def get_cookies():
 @DataSource.register()
 class XueQiuDataSource(BaseDataSource):
 
-    def __init__(self, proxy=None):
+    def __init__(self, proxies=None):
         self._cookies = None
-        super(XueQiuDataSource, self).__init__(proxy=proxy)
+        super(XueQiuDataSource, self).__init__(proxies=proxies)
 
     @property
     def cookies(self):
         if not self._cookies:
-            self._cookies = get_cookies()
+            self._cookies = get_cookies(proxies=self.proxies)
         return self._cookies
 
     def request_kline(self, stock: StockItem, date: datetime = None):
@@ -53,7 +53,7 @@ class XueQiuDataSource(BaseDataSource):
         error = None
         for i in range(3):
             try:
-                response = requests.get(url, params=params, headers=headers, cookies=self.cookies, verify=False,
+                response = requests.get(url, params=params, headers=headers, cookies=self.cookies,
                                         proxies=self.proxies)
             except Exception as e:
                 error = e

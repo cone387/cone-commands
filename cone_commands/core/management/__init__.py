@@ -49,7 +49,8 @@ class ManagementUtility:
         except CommandError:
             pass  # Ignore any option errors at this point.
 
-        print("%s commands are available:" % len(Command.values()))
+        commands = list(Command.keys())
+        print("%s commands are available: %s" % (len(commands), commands))
         try:
             command: BaseCommand = Command(command_name=subcommand, is_registry=False)
         except KeyError:
