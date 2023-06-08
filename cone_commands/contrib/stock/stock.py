@@ -1,3 +1,4 @@
+import sys
 import time
 from cone_commands.core.management.base import BaseCommand, Command
 from .trigger import Trigger, BaseTrigger
@@ -14,7 +15,7 @@ class KlineWatcher(BaseCommand):
         parser.add_argument('--data-source', type=str, help='data source', default='xueqiu')
         parser.add_argument('-c', '--code', type=str, help='stock code', default='')
         parser.add_argument('-n', '--name', type=str, help='stock name', default='')
-        parser.add_argument('-d', '--date', type=str, help='date, format: %Y-%m-%d, default: today')
+        parser.add_argument('-d', '--date', type=str, help=r'date, format: Y-m-d, default: today')
         parser.add_argument('-f', '--forever', action='store_true', help='forever, watch forever, default: False')
         parser.add_argument('-i', '--interval', type=int, help='interval', default=2)
         parser.add_argument('-l', '--columns', type=str, help='columns, control output columns, default: *', default='*')
@@ -80,10 +81,10 @@ class KlineWatcher(BaseCommand):
         if date:
             date = datetime.strptime(date, '%Y-%m-%d')
         if not code and not name:
-            raise ValueError("code or name must be provided, use -c or -n to specify")
+            return self.print_help(sys.argv[0], subcommand='kline_watcher')
         stocks = [StockItem(code=x.strip() if x else None, name=y.strip() if y else None)
                   for x, y in zip_longest(code.split(','), name.split(','))]
-        data_source = DataSource(data_source=options['data_source'], proxy=self.proxies, is_registry=False)
+        data_source = DataSource(data_source=options['data_source'], proxies=self.proxies, is_registry=False)
         if options['forever']:
             self.watch_forever(data_source, stocks, interval=options['interval'], columns=options['columns'])
         else:

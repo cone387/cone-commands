@@ -11,7 +11,7 @@ Trigger = ClassManager(path='cone_commands.contrib.stock.trigger', name='Trigger
                        unique_keys=['trigger'])
 
 Receiver = ClassManager(path='cone_commands.contrib.stock.receiver', name='ReceiverManager',
-                        unique_keys=['receiver'])
+                        unique_keys=['receiver_name'])
 
 
 def get_code_by_name(name):

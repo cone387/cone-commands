@@ -3,6 +3,7 @@ Base classes for writing management commands (named commands which can
 be executed through ``django-admin`` or ``manage.py``).
 """
 import argparse
+import json
 import os
 import sys
 from argparse import ArgumentParser, HelpFormatter
@@ -188,6 +189,8 @@ class BaseCommand:
     name = None
     status = CommandStatus.AVAILABLE
 
+    cache_file = os.path.join(CONFIG_PATH, "command_cache")
+
     @property
     def config_path(self):
         path = os.path.join(CONFIG_PATH, self.command_name)
@@ -196,7 +199,7 @@ class BaseCommand:
         return path
 
     @classproperty
-    def command_name(cls):
+    def command_name(cls) -> str:
         return cls.name or cls.__module__.split(".")[-1]
 
     @command_name.setter
@@ -275,6 +278,12 @@ class BaseCommand:
             parser,
             '--proxy',
             help='default proxy is None, specify system to use system proxy, or specify a proxy url',
+        )
+        self.add_base_argument(
+            parser,
+            '--cache',
+            action='store_true',
+            help='Using last cache to run command, default is False',
         )
         if self.requires_system_checks:
             parser.add_argument(
@@ -371,7 +380,24 @@ class BaseCommand:
             proxy = {'http': None, 'https': None}
         self.proxies = proxy
 
-        output = self.handle(*args, **options)
+        use_cache = options.get('cache')
+        cache = {}
+        command_cache = {}
+        if use_cache and os.path.exists(self.cache_file):
+            with open(self.cache_file, 'rb') as f:
+                cache = json.load(f)
+                command_cache = cache.setdefault(self.command_name, {})
+        cache_args = command_cache.get('args', [])
+        cache_options = command_cache.setdefault('options', {})
+        for k, v in options.items():
+            if k == 'cache':
+                continue
+            if v not in [None, ''] or k not in cache_options:
+                cache_options[k] = v
+        output = self.handle(*(args or cache_args), **cache_options)
+        if use_cache:
+            with open(self.cache_file, 'w') as f:
+                json.dump(cache, f)
         if output:
             self.stdout.write(output)
         return output
