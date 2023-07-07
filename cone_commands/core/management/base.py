@@ -2,10 +2,13 @@
 Base classes for writing management commands (named commands which can
 be executed through ``django-admin`` or ``manage.py``).
 """
+import re
+import requests
 import argparse
 import json
 import os
 import sys
+from urllib.parse import urljoin
 from argparse import ArgumentParser, HelpFormatter
 from functools import partial
 from io import TextIOBase
@@ -13,7 +16,8 @@ from cone_commands.core.management.color import color_style, no_style
 from cone_commands.conf.global_settings import CONFIG_PATH
 from cone.utils.classes import ClassManager
 from cone.utils.functional import classproperty
-
+from cone_commands.core.status import CommandStatus
+from typing import Union, List, Dict
 
 Command = ClassManager(name="Command",
                        path=[
@@ -24,7 +28,100 @@ Command = ClassManager(name="Command",
                        )
 
 
-from cone_commands.core.status import CommandStatus
+class RemoteCommandManager(dict):
+    def __init__(self, servers: Union[List, None, str] = None):
+
+        if not isinstance(servers, list):
+            if servers is None:
+                servers = os.environ.get('REMOTE_COMMAND_SERVERS', '')
+            servers = [x.strip() for x in servers.split(',')]
+        self._current_server = None
+        self._current_command = None
+        for server in servers:
+            self.register_server(server)
+        self: Dict[str, Union[None, str, Dict[str, str]]]
+        super().__init__()
+
+    def __call__(self, command_name) -> 'RemoteCommandManager':
+        for server, commands in self.items():
+            if isinstance(commands, dict) and command_name in commands:
+                self._current_server = server
+                return self
+        raise KeyError("Command %s not found" % command_name)
+
+    def run_from_argv(self, *args, command=None, server=None, **kwargs):
+        server = server or self._current_server
+        command = command or self._current_command
+        assert command is not None, "No command specified"
+        assert server is not None, "No server specified"
+        try:
+            url = urljoin(server, 'execute/')
+            response = requests.get(url, params={
+                "name": command,
+                "kwargs": kwargs,
+            }).json()
+        except Exception as e:
+            raise ImportError("Failed to execute command %s from %s: %s" % (command, server, e))
+        finally:
+            self._current_server = None
+            self._current_command = None
+        return response
+
+    def register_server(self, server):
+        assert re.match(r'^https?:/{2}\w.+$', server), "Invalid server URL"
+        self[server] = None
+
+    def load_from_server(self, server):
+        try:
+            response = requests.get(urljoin(server, 'list/'))
+            assert response.status_code == 200, "list commands failed, response is %s" % response.text
+        except Exception as e:
+            self[server] = str(e)
+            raise ImportError("Failed to load commands from %s: %s" % (server, e))
+        self[server] = response.json()['commands']
+
+    def _ensure_loaded(self):
+        for server, commands in super().items():
+            if commands is None:
+                self.load_from_server(server)
+
+    def __getitem__(self, key):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__getitem__(key)
+
+    def __len__(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__len__()
+
+    def __contains__(self, item):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__contains__(item)
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__iter__()
+
+    def keys(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).values()
+
+    def items(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).items()
+
+    def find(self, name):
+        return self[name]
+
+    def __str__(self):
+        return "RemoteCommandManager(path=%s, num=%s)" % (self.keys(), len(self))
+
+
+RemoteCommand = RemoteCommandManager()
+
 
 ALL_CHECKS = "__all__"
 
@@ -91,16 +188,6 @@ class CommandParser(ArgumentParser):
                 called_from_command_line=self.called_from_command_line,
             )
         return super().add_subparsers(**kwargs)
-
-
-def handle_default_options(options):
-    """
-    Include any default options that all commands should accept here
-    so that ManagementUtility can handle them before searching for
-    user commands.
-    """
-    if options.pythonpath:
-        sys.path.insert(0, options.pythonpath)
 
 
 class DjangoHelpFormatter(HelpFormatter):
@@ -334,7 +421,6 @@ class BaseCommand:
         cmd_options = vars(options)
         # Move positional args out of options to mimic legacy optparse
         args = cmd_options.pop("args", ())
-        handle_default_options(options)
         try:
             self.execute(*args, **cmd_options)
         except CommandError as e:

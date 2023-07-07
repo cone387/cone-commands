@@ -10,7 +10,7 @@ class HelpCommand(BaseCommand):
 
     def handle(self, *args, **options):
         if "--commands" in args:
-            sys.stdout.write('\n'.join(list(Command.keys())) + "\n")
+            self.stdout.write('\n'.join(list(Command.keys())) + "\n")
         elif not args:
             usage = [
                 "",
@@ -28,7 +28,7 @@ class HelpCommand(BaseCommand):
                 usage.append(style.NOTICE("[%s]" % app))
                 for name in sorted(commands_dict[app]):
                     usage.append("    %s" % name)
-            sys.stdout.write("\n".join(usage) + "\n")
+            self.stdout.write("\n".join(usage) + "\n")
         else:
             command: BaseCommand = Command(args[0], is_registry=False)()
             command.print_help(self.prog_name, args[0])

@@ -1,4 +1,3 @@
-import sys
 import cone_commands
 from cone_commands.core.management.base import BaseCommand, Command
 
@@ -14,4 +13,4 @@ class VersionCommand(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        sys.stdout.write(cone_commands.__version__ + "\n")
+        self.stdout.write(cone_commands.__version__ + "\n")

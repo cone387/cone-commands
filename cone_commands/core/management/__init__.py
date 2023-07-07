@@ -2,10 +2,10 @@ import os
 import sys
 from cone_commands.core.management.base import (
     Command,
+    RemoteCommand,
     BaseCommand,
     CommandError,
     CommandParser,
-    handle_default_options,
 )
 from cone_commands.core.management.color import color_style
 
@@ -44,19 +44,22 @@ class ManagementUtility:
         parser.add_argument("--pythonpath")
         parser.add_argument("args", nargs="*")  # catch-all
         try:
-            options, args = parser.parse_known_args(self.argv[2:])
-            handle_default_options(options)
+            parser.parse_known_args(self.argv[2:])
         except CommandError:
             pass  # Ignore any option errors at this point.
 
         commands = list(Command.keys())
-        print("%s commands are available: %s" % (len(commands), commands))
+        print("%s local commands are available: %s" % (len(commands), commands))
+        print("%s remote commands are available: %s" % (len(RemoteCommand), RemoteCommand))
         try:
             command: BaseCommand = Command(command_name=subcommand, is_registry=False)
         except KeyError:
-            print("Unknown command: %r\nType '%s help' for usage." % (subcommand, self.prog_name))
-        else:
-            command.run_from_argv(self.argv)
+            try:
+                command = RemoteCommand(command_name=subcommand)
+            except KeyError:
+                print("Unknown command: %r\nType '%s help' for usage." % (subcommand, self.prog_name))
+                sys.exit(1)
+        command.run_from_argv(self.argv)
 
 
 def execute_from_command_line(argv=None):
