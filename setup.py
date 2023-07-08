@@ -3,9 +3,9 @@ from setuptools import setup, find_packages
 setup(
     name='cone-commands',
     packages=find_packages(exclude=['local_tests', 'tests']),
-    version='1.0.0',
+    version='1.0.1',
     install_requires=[
-        "py-cone>=1.0.9",
+        "py-cone>=1.1.0",
     ],
     include_package_data=True,
     author='cone387',

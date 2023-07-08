@@ -28,101 +28,6 @@ Command = ClassManager(name="Command",
                        )
 
 
-class RemoteCommandManager(dict):
-    def __init__(self, servers: Union[List, None, str] = None):
-
-        if not isinstance(servers, list):
-            if servers is None:
-                servers = os.environ.get('REMOTE_COMMAND_SERVERS', '')
-            servers = [x.strip() for x in servers.split(',')]
-        self._current_server = None
-        self._current_command = None
-        for server in servers:
-            self.register_server(server)
-        self: Dict[str, Union[None, str, Dict[str, str]]]
-        super().__init__()
-
-    def __call__(self, command_name) -> 'RemoteCommandManager':
-        for server, commands in self.items():
-            if isinstance(commands, dict) and command_name in commands:
-                self._current_server = server
-                return self
-        raise KeyError("Command %s not found" % command_name)
-
-    def run_from_argv(self, *args, command=None, server=None, **kwargs):
-        server = server or self._current_server
-        command = command or self._current_command
-        assert command is not None, "No command specified"
-        assert server is not None, "No server specified"
-        try:
-            url = urljoin(server, 'execute/')
-            response = requests.get(url, params={
-                "name": command,
-                "kwargs": kwargs,
-            }).json()
-        except Exception as e:
-            raise ImportError("Failed to execute command %s from %s: %s" % (command, server, e))
-        finally:
-            self._current_server = None
-            self._current_command = None
-        return response
-
-    def register_server(self, server):
-        assert re.match(r'^https?:/{2}\w.+$', server), "Invalid server URL"
-        self[server] = None
-
-    def load_from_server(self, server):
-        try:
-            response = requests.get(urljoin(server, 'list/'))
-            assert response.status_code == 200, "list commands failed, response is %s" % response.text
-        except Exception as e:
-            self[server] = str(e)
-            raise ImportError("Failed to load commands from %s: %s" % (server, e))
-        self[server] = response.json()['commands']
-
-    def _ensure_loaded(self):
-        for server, commands in super().items():
-            if commands is None:
-                self.load_from_server(server)
-
-    def __getitem__(self, key):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).__getitem__(key)
-
-    def __len__(self):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).__len__()
-
-    def __contains__(self, item):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).__contains__(item)
-
-    def __iter__(self):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).__iter__()
-
-    def keys(self):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).keys()
-
-    def values(self):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).values()
-
-    def items(self):
-        self._ensure_loaded()
-        return super(RemoteCommandManager, self).items()
-
-    def find(self, name):
-        return self[name]
-
-    def __str__(self):
-        return "RemoteCommandManager(path=%s, num=%s)" % (self.keys(), len(self))
-
-
-RemoteCommand = RemoteCommandManager()
-
-
 ALL_CHECKS = "__all__"
 
 
@@ -496,3 +401,127 @@ class BaseCommand:
         raise NotImplementedError(
             "subclasses of BaseCommand must provide a handle() method"
         )
+
+
+class RemoteCommandManager(dict, BaseCommand):
+    def __init__(self, servers: Union[List, None, str] = None):
+
+        if not isinstance(servers, list):
+            if servers is None:
+                servers = os.environ.get('REMOTE_COMMAND_SERVERS', None)
+            servers = [x.strip() for x in servers.split(',')] if servers else []
+        self._current_server = None
+        self._current_command = None
+        for server in servers:
+            self.register_server(server)
+        self: Dict[str, Union[None, str, Dict[str, str]]]
+        super().__init__()
+
+    def __call__(self, command_name) -> 'RemoteCommandManager':
+        for server, commands in self.items():
+            if isinstance(commands, dict) and command_name in commands:
+                self._current_server = server
+                self._current_command = command_name
+                return self
+        raise KeyError("Command %s not found" % command_name)
+
+    @property
+    def current_command(self):
+        return self[self._current_server][self._current_command]
+
+    def run_from_argv(self, argv):
+        parser = self.create_parser(argv[0], argv[1])
+        options = parser.parse_args(argv[2:])
+        cmd_options = vars(options)
+        # Move positional args out of options to mimic legacy optparse
+        args = cmd_options.pop("args", ())
+        try:
+            self.execute(server=self._current_server, command=self._current_command, **cmd_options)
+        except CommandError as e:
+            if options.traceback:
+                raise
+            sys.exit(e.returncode)
+
+    def add_arguments(self, parser: CommandParser):
+        properties = self.current_command['scheme']['properties']
+        for key, detail in properties['kwargs']['properties'].items():
+            parser.add_argument(
+                '--%s' % key,
+                # type=detail['type'],
+                required=detail.get('required', False),
+                default=detail.get('default', None),
+            )
+
+    def handle(self, *args, server=None, command=None, **options):
+        kwargs = self.current_command['scheme']['properties']['kwargs']['properties']
+        try:
+            url = urljoin(server, 'execute/')
+            response = requests.get(url, params={
+                "name": command,
+                "kwargs": json.dumps({k: options[k] for k in kwargs}),
+            })
+            content = response.json()
+            if content['status'] == 'success':
+                print(content['result'])
+            else:
+                raise CommandError(content['message'])
+        except Exception as e:
+            raise RuntimeError("Failed to execute command %s from %s: %s" % (command, server, e))
+        finally:
+            self._current_server = None
+            self._current_command = None
+
+    def register_server(self, server):
+        assert re.match(r'^https?:/{2}\w.+$', server), "Invalid server URL"
+        self[server] = None
+
+    def load_from_server(self, server):
+        try:
+            response = requests.get(urljoin(server, 'list/'))
+            assert response.status_code == 200, "list commands failed, response is %s" % response.text
+        except Exception as e:
+            self[server] = str(e)
+            raise ImportError("Failed to load commands from %s: %s" % (server, e))
+        self[server] = {x['name']: x for x in response.json()['commands']}
+
+    def _ensure_loaded(self):
+        for server, commands in super().items():
+            if commands is None:
+                self.load_from_server(server)
+
+    def __getitem__(self, key):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__getitem__(key)
+
+    def __len__(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__len__()
+
+    def __contains__(self, item):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__contains__(item)
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).__iter__()
+
+    def keys(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).values()
+
+    def items(self):
+        self._ensure_loaded()
+        return super(RemoteCommandManager, self).items()
+
+    def find(self, name):
+        return self[name]
+
+    def __str__(self):
+        return "RemoteCommandManager(path=%s, num=%s)" % (self.keys(), len(self))
+
+
+RemoteCommand = RemoteCommandManager()

@@ -48,9 +48,12 @@ class ManagementUtility:
         except CommandError:
             pass  # Ignore any option errors at this point.
 
-        commands = list(Command.keys())
-        print("%s local commands are available: %s" % (len(commands), commands))
-        print("%s remote commands are available: %s" % (len(RemoteCommand), RemoteCommand))
+        local_commands = list(Command.keys())
+        remote_commands = []
+        for _, items in RemoteCommand.items():
+            remote_commands.extend(items.keys())
+        print("%s local commands are available: %s" % (len(local_commands), local_commands))
+        print("%s remote commands are available: %s" % (len(remote_commands), remote_commands))
         try:
             command: BaseCommand = Command(command_name=subcommand, is_registry=False)
         except KeyError:
